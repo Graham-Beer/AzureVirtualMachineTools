@@ -126,7 +126,8 @@
             Select-Object $outputInfo 
     }
  }
- Function Get-AZrMPublisher {
+
+Function Get-AZrMPublisher {
      <#
      .SYNOPSIS
      Find image publisher 
@@ -178,7 +179,8 @@
             select-Object $outputinfo
     }
  }     
- Function New-AZRmRG {
+
+Function New-AZRmRG {
      <#
      .SYNOPSIS
      Create a resource group in Azure
@@ -225,7 +227,8 @@
         }    
     }
  } 
- Function New-AZRmStorageAccount {
+
+Function New-AZRmStorageAccount {
      <#
      .SYNOPSIS
      Create a storage account in Azure
@@ -301,7 +304,8 @@
 
 # region main functions
  # Configure Network
- Function New-AZRmNetwork {
+
+Function New-AZRmNetwork {
      <#
      .SYNOPSIS
      Create a network for a Virtual machine
@@ -407,7 +411,8 @@
     }
  }
  # Create Virtual Machine
- Function New-AZRmVirtualMachine {
+
+Function New-AZRmVirtualMachine {
      <#
      .SYNOPSIS
      Create the Virtual Machine
