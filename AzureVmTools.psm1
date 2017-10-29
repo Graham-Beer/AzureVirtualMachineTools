@@ -1,7 +1,7 @@
 
 # region dynamic location parameter function 
- Function DynamicLocationParam {
-     <#
+Function DynamicLocationParam {
+    <#
      .SYNOPSIS
      Function to add location description
      
@@ -45,11 +45,11 @@
     $RuntimeParameter = New-Object System.Management.Automation.RuntimeDefinedParameter($ParameterName, [string], $AttributeCollection)
     $RuntimeParameterDictionary.Add($ParameterName, $RuntimeParameter)
     return $RuntimeParameterDictionary
- }
- # end region 
+}
+# end region 
 
 # region helper functions
- Function Connect-AZRm {
+Function Connect-AZRm {
     <#
     .SYNOPSIS
     Connect to Azure Resoure Manager
@@ -83,14 +83,13 @@
     Try { 
         Login-AzureRmAccount @connect 
         Write-Host -ForegroundColor Cyan "Connection Successful to Azure"
-    }
-    Catch { 
+    } Catch { 
         $pscmdlet.ThrowTerminatingError($_)
     }
- }
+}
 
- Function Get-AZrMVmOptionSizes {
-     <#
+Function Get-AZrMVmOptionSizes {
+    <#
      .SYNOPSIS
      List VM size options by location
      
@@ -125,10 +124,9 @@
             Sort-Object Name | 
             Select-Object $outputInfo 
     }
- }
-
+}
 Function Get-AZrMPublisher {
-     <#
+    <#
      .SYNOPSIS
      Find image publisher 
      
@@ -178,10 +176,10 @@ Function Get-AZrMPublisher {
             Sort-Object PublisherName |
             select-Object $outputinfo
     }
- }     
+} 
 
 Function New-AZRmRG {
-     <#
+    <#
      .SYNOPSIS
      Create a resource group in Azure
      
@@ -226,10 +224,9 @@ Function New-AZRmRG {
             Write-Error -Message "Failed to create group"
         }    
     }
- } 
-
+} 
 Function New-AZRmStorageAccount {
-     <#
+    <#
      .SYNOPSIS
      Create a storage account in Azure
      
@@ -288,25 +285,24 @@ Function New-AZRmStorageAccount {
             $pscmdlet.ThrowTerminatingError($_)            
         }
     }
- }
- # end region helper functions
+}
+# end region helper functions
 
 # region ArgumentCompleter
- # Add location completion to 'New-AzureRmStorageAccount' 
- Register-ArgumentCompleter -CommandName New-AzureRmStorageAccount -ParameterName Location -ScriptBlock {
+# Add location completion to 'New-AzureRmStorageAccount' 
+Register-ArgumentCompleter -CommandName New-AzureRmStorageAccount -ParameterName Location -ScriptBlock {
     Get-AzureRmLocation | Select-Object -ExpandProperty Location    
- }
+}
 
- Register-ArgumentCompleter -CommandName Get-AzureRmVMImageOffer -ParameterName Publishername -ScriptBlock {
+Register-ArgumentCompleter -CommandName Get-AzureRmVMImageOffer -ParameterName Publishername -ScriptBlock {
     Get-AzureRmPublisher -Publisher * -location $_.location
- }
- # region end ArgumentCompleter 
+}
+# region end ArgumentCompleter 
 
 # region main functions
- # Configure Network
-
+# Configure Network
 Function New-AZRmNetwork {
-     <#
+    <#
      .SYNOPSIS
      Create a network for a Virtual machine
      
@@ -347,7 +343,7 @@ Function New-AZRmNetwork {
         [string] $ResourceGroupName,
         [string] $InterfaceName,
         [ValidateSet('Dynamic', 'Static')] $AllocationMethod,
-        [string] $VNetName = "VNet09",
+        [string] $VNetName = "VNet01",
         [string] $SubnetName,
         [string] $VNetSubnetAddressPrefix = "10.0.0.0/24",
         [string] $VNetAddressPrefix = "10.0.0.0/16"
@@ -359,7 +355,11 @@ Function New-AZRmNetwork {
     End {
         # Bind the parameter to a friendly variable
         $Location = $PsBoundParameters['Location']
-                
+
+        # Suppress Azure cmdlet message,
+        # 'WARNING: The output object type of this cmdlet will be modified in a future release.' 
+        $WarningPreference = 'SilentlyContinue' 
+        
         # Create Public IP Address
         $PIP = @{
             Name              = "${InterfaceName}_nic1"
@@ -372,11 +372,37 @@ Function New-AZRmNetwork {
             $PublicIP = New-AzureRmPublicIpAddress @PIP
             Write-Verbose -Message "[PROCESS] Created Public IP Address"
 
+            # Remote Desktop Rule
+            $rule1 = [Microsoft.Azure.Commands.Network.Models.PSSecurityRule]@{
+                Name                     = 'RDP-Rule' 
+                Description              = "Allow RDP" 
+                Access                   = 'Allow' 
+                Protocol                 = 'Tcp' 
+                Direction                = 'Inbound' 
+                Priority                 = 100 
+                SourceAddressPrefix      = [System.Collections.Generic.List[string]]'Internet'
+                SourcePortRange          = [System.Collections.Generic.List[String]]'*' 
+                DestinationAddressPrefix = [System.Collections.Generic.List[String]]'*' 
+                DestinationPortRange     = [System.Collections.Generic.List[String]]'3389'
+            }
+            Write-Verbose -Message "[PROCESS] Security Group Remote Desktop Rule configured"
+
+            # Security Group 
+            $SecurityGrp = @{
+                ResourceGroupName = $ResourceGroupName
+                Location          = $Location
+                Name              = "${InterfaceName}_Security_grp"
+                SecurityRules     = $rule1
+            }
+            $NetSecGrp = New-AzureRmNetworkSecurityGroup @SecurityGrp
+            Write-Verbose -Message "[PROCESS] Security Group Successfully Created"
+
             # Configure Subnet
             $Subnet = @{
-                Name          = $SubnetName 
-                AddressPrefix = $VNetSubnetAddressPrefix
-                ErrorAction   = 'Stop'
+                Name                 = $SubnetName 
+                AddressPrefix        = $VNetSubnetAddressPrefix
+                NetworkSecurityGroup = $NetSecGrp
+                ErrorAction          = 'Stop'
             }
             $SubnetCFG = New-AzureRmVirtualNetworkSubnetConfig @Subnet
             Write-Verbose -Message "[PROCESS] Configured Subnet Successfully"
@@ -409,11 +435,11 @@ Function New-AZRmNetwork {
             $pscmdlet.ThrowTerminatingError($_)
         }
     }
- }
- # Create Virtual Machine
+}
 
+# Create Virtual Machine
 Function New-AZRmVirtualMachine {
-     <#
+    <#
      .SYNOPSIS
      Create the Virtual Machine
      
@@ -637,10 +663,10 @@ Function New-AZRmVirtualMachine {
             $pscmdlet.ThrowTerminatingError($_)
         }
     } # Process block
- } # Function block
+} # Function block
 
- # Make RDP connection to Azure Virtual Machine
- Filter Connect-AZRmRDP {
+# Make RDP connection to Azure Virtual Machine
+Filter Connect-AZRmRDP {
     [Cmdletbinding()]
     Param (
         [Parameter(Mandatory, Position = 0)]
@@ -682,5 +708,5 @@ Function New-AZRmVirtualMachine {
     } Catch {
         $pscmdlet.ThrowTerminatingError($_)
     }        
- }
- # end region main functions
+}
+# end region main functions
