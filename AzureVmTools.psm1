@@ -1,5 +1,22 @@
-## Dynamic Param location template
-Function DynamicLocationParam {
+
+# region dynamic location parameter function 
+ Function DynamicLocationParam {
+     <#
+     .SYNOPSIS
+     Function to add location description
+     
+     .DESCRIPTION
+     This command uses the azure 'Get-AzureRmLocation' cmdlet to obtain locations in azure.
+     A lot of the commands currently don't dynamically generate the locations used, making it
+     an extra task to find.
+     
+     .EXAMPLE
+     This is added as a dynamic parameter to a function
+     
+     .NOTES
+     General notes
+     #>
+
     # Set the dynamic parameters' name
     $ParameterName = 'Location'
 
@@ -28,12 +45,65 @@ Function DynamicLocationParam {
     $RuntimeParameter = New-Object System.Management.Automation.RuntimeDefinedParameter($ParameterName, [string], $AttributeCollection)
     $RuntimeParameterDictionary.Add($ParameterName, $RuntimeParameter)
     return $RuntimeParameterDictionary
-}
+ }
+ # end region 
 
-# Helper Functions
+# region helper functions
+ Function Connect-AZRm {
+    <#
+    .SYNOPSIS
+    Connect to Azure Resoure Manager
+    
+    .DESCRIPTION
+    Connect to Azure through PowerShell
+    
+    .PARAMETER Credentials
+    Pass Azure credentials
+    
+    .PARAMETER TenantId
+    Azure Tenant Id
+    
+    .EXAMPLE
+    Connect-AZRm -Credentials User@Domain.com -TenantId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+    
+    .NOTES
+    General notes
+    #>
+    [CmdletBinding()]
+    param (
+        [System.Management.Automation.PSCredential] $Credentials,
+        [string] $TenantId
+    )
+    
+    $connect = @{
+        Credential = $Credentials
+        TenantId   = $TenantId
+    }
+    # Make connection
+    Try { 
+        Login-AzureRmAccount @connect 
+        Write-Host -ForegroundColor Cyan "Connection Successful to Azure"
+    }
+    Catch { 
+        $pscmdlet.ThrowTerminatingError($_)
+    }
+ }
 
-# View VM size Options
-Function Get-AZrMVmOptionSizes {
+ Function Get-AZrMVmOptionSizes {
+     <#
+     .SYNOPSIS
+     List VM size options by location
+     
+     .DESCRIPTION
+     A helper function to list Virtual Machines sizes available by location.
+     
+     .EXAMPLE
+     Get-AZrMVmOptionSizes -Location 'UkSouth'
+     
+     .NOTES
+     Uses the dynamic location parameter to easily search through locations
+     #>
+
     [CmdletBinding()]
     Param()
  
@@ -55,9 +125,34 @@ Function Get-AZrMVmOptionSizes {
             Sort-Object Name | 
             Select-Object $outputInfo 
     }
-}
+ }
+ Function Get-AZrMPublisher {
+     <#
+     .SYNOPSIS
+     Find image publisher 
+     
+     .DESCRIPTION
+     The function takes a wildcard search on the publisher name
+     making is easier to find a image publisher. The image publisher
+     determines what images are available to use.
+     
+     .PARAMETER Publisher
+     Take a wildcard search on publisher. i.e. MicrosoftWindows*,
+     *Windows*
+     
+     .EXAMPLE
+     Get-AZrMPublisher -Publisher MicrosoftWindows* -Location uksouth
 
-Function Get-AZrMPublisher {
+     PublisherName                 Location
+     -------------                 --------
+     MicrosoftWindowsDesktop       uksouth
+     MicrosoftWindowsServer        uksouth
+     MicrosoftWindowsServerHPCPack uksouth
+     
+     .NOTES
+     The location parameter uses the dynamic parameter, 'DynamicLocationParam'.
+     #>
+
     [CmdletBinding()]
     Param(
         [string] $Publisher
@@ -82,10 +177,26 @@ Function Get-AZrMPublisher {
             Sort-Object PublisherName |
             select-Object $outputinfo
     }
-}    
+ }     
+ Function New-AZRmRG {
+     <#
+     .SYNOPSIS
+     Create a resource group in Azure
+     
+     .DESCRIPTION
+     A helper function to create a resource group in azure utlising 
+     the dynamic location parameter
+     
+     .PARAMETER ResourceGroupName
+     Takes a string with the name of the resource group you wish to create.
+     
+     .EXAMPLE
+     New-AZRmRG -ResourceGroupName 'Test' -Location westeurope
+     
+     .NOTES
+     The location parameter uses the dynamic parameter, 'DynamicLocationParam'.
+     #>
 
-# Create a resource group
-Function New-AZRmRG {
     [CmdletBinding()]
     Param(
         [string]$ResourceGroupName
@@ -113,19 +224,33 @@ Function New-AZRmRG {
             Write-Error -Message "Failed to create group"
         }    
     }
-}
+ } 
+ Function New-AZRmStorageAccount {
+     <#
+     .SYNOPSIS
+     Create a storage account in Azure
+     
+     .DESCRIPTION
+     Create a storage account to attach a newly created virtual
+     machine to.
+     
+     .PARAMETER ResourceGroupName
+     Parse an existing resource group for the storage account to 
+     be created in.
+     
+     .PARAMETER StorageName
+     Name your storage account
+     
+     .PARAMETER StorageType
+     Define the type of storage required for the virtual machine
+     
+     .EXAMPLE
+     New-AZRmStorageAccount -ResourceGroupName 'Test' -StorageName 'StorageAcc1' -StorageType Standard_GRS -Location uksouth
+     
+     .NOTES
+     The location parameter uses the dynamic parameter, 'DynamicLocationParam'.
+     #>
 
-# Add location completion to 'New-AzureRmStorageAccount' 
-Register-ArgumentCompleter -CommandName New-AzureRmStorageAccount -ParameterName Location -ScriptBlock {
-    Get-AzureRmLocation | Select-Object -ExpandProperty Location    
-}
-
-Register-ArgumentCompleter -CommandName Get-AzureRmVMImageOffer -ParameterName Publishername -ScriptBlock {
-    Get-AzureRmPublisher -Publisher * -location $_.location
-}
-
-# Create new Storage Account
-Function New-AZRmStorageAccount {
     [CmdletBinding()]
     param(
         [Parameter(ValueFromPipeline)]
@@ -160,10 +285,59 @@ Function New-AZRmStorageAccount {
             $pscmdlet.ThrowTerminatingError($_)            
         }
     }
-}
+ }
+ # end region helper functions
 
-# Configure Network
-Function New-AZRmNetwork {
+# region ArgumentCompleter
+ # Add location completion to 'New-AzureRmStorageAccount' 
+ Register-ArgumentCompleter -CommandName New-AzureRmStorageAccount -ParameterName Location -ScriptBlock {
+    Get-AzureRmLocation | Select-Object -ExpandProperty Location    
+ }
+
+ Register-ArgumentCompleter -CommandName Get-AzureRmVMImageOffer -ParameterName Publishername -ScriptBlock {
+    Get-AzureRmPublisher -Publisher * -location $_.location
+ }
+ # region end ArgumentCompleter 
+
+# region main functions
+ # Configure Network
+ Function New-AZRmNetwork {
+     <#
+     .SYNOPSIS
+     Create a network for a Virtual machine
+     
+     .DESCRIPTION
+     Create and define a network to use with a virtual machine.
+     
+     .PARAMETER ResourceGroupName
+     Parse an existing resource group for the storage account to 
+     be created in.
+     
+     .PARAMETER InterfaceName
+     Add a name for the network interface
+     
+     .PARAMETER AllocationMethod
+     takes two options, either a 'Dynamic' or 'Static' IP.
+     
+     .PARAMETER VNetName
+     Add a name for the Vnet adapter
+     
+     .PARAMETER SubnetName
+     Add a name for the Subnet
+     
+     .PARAMETER VNetSubnetAddressPrefix
+     IP range for the subnet, i.e. '10.0.0.0/24'
+     
+     .PARAMETER VNetAddressPrefix
+     Address range
+     
+     .EXAMPLE
+     New-AZRmNetwork -ResourceGroupName 'test' -InterfaceName 'Network01' -AllocationMethod Static -VNetName 'Vnet09' -SubnetName 'Subnet01' `
+     -VNetSubnetAddressPrefix '10.0.0.0/24' -VNetAddressPrefix '10.0.0.0/16' -Location uksouth
+     
+     .NOTES
+     The location parameter uses the dynamic parameter, 'DynamicLocationParam'.
+     #>
     [CmdletBinding()]
     param(
         [string] $ResourceGroupName,
@@ -231,10 +405,98 @@ Function New-AZRmNetwork {
             $pscmdlet.ThrowTerminatingError($_)
         }
     }
-}
-
-# Create Virtual Machine
-Function New-AZRmVirtualMachine {
+ }
+ # Create Virtual Machine
+ Function New-AZRmVirtualMachine {
+     <#
+     .SYNOPSIS
+     Create the Virtual Machine
+     
+     .DESCRIPTION
+     The function will fully provision the virtual machine
+     ready for use.
+     
+     .PARAMETER Credentials
+     Parse the credentials that the virtual machine will use
+     for login
+     
+     .PARAMETER ResourceGroupName
+     Parse an existing resource group for the storage account to 
+     be created in.
+     
+     .PARAMETER VirtualMachineName
+     Name the virtual machine
+     
+     .PARAMETER VMSizeOption
+     Add the virtual machine size to use. Use helper
+     function 'Get-AZrMVmOptionSizes' to help find
+     virtual machine sizing options i.e. 'Standard_A2'
+     
+     .PARAMETER OSPlatform
+     Choose between either 'Linux' or 'Windows' for operating
+     system platform.
+     
+     .PARAMETER ComputerName
+     Add a computer name
+     
+     .PARAMETER PublisherName
+     Set a publisher name. Use helper function 'Get-AZrMPublisher'
+     to get options available.
+     
+     .PARAMETER Offer
+     Set what type of Operating System to build, i.e. 'WindowsServer'
+     
+     .PARAMETER Skus
+     Choose the Operating System to build the Virtual machine as.
+     i.e. '2012-R2-Datacenter'
+     
+     .PARAMETER Version
+     Choose the version. This parameter is set to 'latest' as default.
+     
+     .PARAMETER InterfaceName
+     Add the network interface name to use
+     
+     .PARAMETER StorageName
+     Name your storage account
+     
+     .PARAMETER StorageType
+     Define the type of storage required for the virtual machine
+     
+     .PARAMETER CreateOption
+     Specifies whether this cmdlet creates a disk in the virtual machine from a platform 
+     or user image, or attaches an existing disk. Options are 'FromImage' or 'Attach'.
+     
+     .PARAMETER ProvisionVMAgent
+     ndicates that the settings require that the virtual machine agent be installed on 
+     the virtual machine.
+     
+     .PARAMETER EnableAutoUpdate
+     Indicates that this cmdlet enables auto update.
+     
+     .EXAMPLE
+     $DefineVmParams = @{
+        Credentials        = $psCred
+        ResourceGroupName  = 'VM'
+        VirtualMachineName = 'DemoExampleVM'
+        VMSizeOption       = 'Standard_A2'
+        OSPlatform         = 'Windows'
+        ComputerName       = 'Computer1'
+        Location           = 'WestEurope'
+        PublisherName      = 'MicrosoftWindowsServer'
+        Offer              = 'WindowsServer'
+        Skus               = '2012-R2-Datacenter'
+        InterFaceName      = 'ServerNet'
+        StorageName        = 'vmstorageunit12'
+        StorageType        = 'Standard_GRS'
+        ProvisionVMAgent   = $true
+        EnableAutoUpdate   = $true
+        Verbose            = $true
+     }
+     New-AZRmVirtualMachine @DefineVmParams
+     
+     .NOTES
+     The location parameter uses the dynamic parameter, 'DynamicLocationParam'.
+     #>
     [CmdletBinding()]
     param (
         # Pass in Username and password of Admin Account
@@ -370,10 +632,10 @@ Function New-AZRmVirtualMachine {
             $pscmdlet.ThrowTerminatingError($_)
         }
     } # Process block
-} # Function block
+ } # Function block
 
-# Make RDP connection to Azure Virtual Machine
-Function Connect-AZRmRDP {
+ # Make RDP connection to Azure Virtual Machine
+ Filter Connect-AZRmRDP {
     [Cmdletbinding()]
     Param (
         [Parameter(Mandatory, Position = 0)]
@@ -382,41 +644,38 @@ Function Connect-AZRmRDP {
         [String] $VirtualMachineName
     )
     
-    Process {
-        # Set Virtual Machine search
-        $Vm = @{
-            ResourceGroupName = $ResourceGroupName 
-            Name              = $VirtualMachineName
+    # Set Virtual Machine search
+    $Vm = @{
+        ResourceGroupName = $ResourceGroupName 
+        Name              = $VirtualMachineName
+        ErrorAction       = 'Stop'
+    }
+    Try {
+        # Find Virtual Machine
+        $rdpVM = Get-AzureRmVM @Vm
+        Write-Verbose -Message "[PROCESS] Virtual Machine details found"
+
+        # Get NIC name
+        $Id = @{ResourceGroupName = $ResourceGroupName; ErrorAction = 'Stop'}
+        $Nic = Get-AzureRmNetworkInterface @Id | 
+            Where-Object {$_.Id -Like ($rdpVM.NetworkProfile.NetworkInterfaces.id)}
+
+        $Nic = ($Nic.IpConfigurations.PublicIpAddress.ID -split '/')[-1]
+
+        Write-Verbose -Message "[PROCESS] NIC name found"
+        # Public IP Address for RDP connection
+        $Ip = @{
+            Name              = $Nic
+            ResourceGroupName = $rdpVM.ResourceGroupName
             ErrorAction       = 'Stop'
         }
-        Try {
-            # Find Virtual Machine
-            $rdpVM = Get-AzureRmVM @Vm
-            Write-Verbose -Message "[PROCESS] Virtual Machine details found"
-
-            # Get NIC name
-            $Id = @{ResourceGroupName = $ResourceGroupName; ErrorAction = 'Stop'}
-            $Nic = Get-AzureRmNetworkInterface @Id | 
-                Where-Object {$_.Id -Like ($rdpVM.NetworkProfile.NetworkInterfaces.id)}
-
-            $Nic = ($Nic.IpConfigurations.PublicIpAddress.ID -split '/')[-1]
-
-            Write-Verbose -Message "[PROCESS] NIC name found"
-            # Public IP Address for RDP connection
-            $Ip = @{
-                Name              = $Nic
-                ResourceGroupName = $rdpVM.ResourceGroupName
-                ErrorAction       = 'Stop'
-            }
-            $PublicIp = (Get-AzureRmPublicIpAddress @Ip).IpAddress
-            Write-Verbose -Message "[PROCESS] Public IP Address found "
+        $PublicIp = (Get-AzureRmPublicIpAddress @Ip).IpAddress
+        Write-Verbose -Message "[PROCESS] Public IP Address found "
             
-            # Create Scriptblock  
-            $RDPcommand = [scriptblock]::Create("mstsc -v:$PublicIp /prompt")
-            # Dot source Scriptblock
-            .$RDPcommand
-        } Catch {
-            $pscmdlet.ThrowTerminatingError($_)
-        }        
-    }
-}
+        # RDP Connection  
+        mstsc -v:$PublicIp /prompt
+    } Catch {
+        $pscmdlet.ThrowTerminatingError($_)
+    }        
+ }
+ # end region main functions
