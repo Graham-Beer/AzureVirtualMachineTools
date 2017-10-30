@@ -76,8 +76,10 @@ Function Connect-AZRm {
     )
     
     $connect = @{
-        Credential = $Credentials
-        TenantId   = $TenantId
+        Credential  = $Credentials
+        TenantId    = $TenantId
+        Environment = 'AzureCloud'
+        ErrorAction = 'Stop'
     }
     # Make connection
     Try { 
@@ -371,32 +373,48 @@ Function New-AZRmNetwork {
         Try {
             $PublicIP = New-AzureRmPublicIpAddress @PIP
             Write-Verbose -Message "[PROCESS] Created Public IP Address"
-
+            
             # Remote Desktop Rule
-            $rule1 = [Microsoft.Azure.Commands.Network.Models.PSSecurityRule]@{
+            $RDPrule = [Microsoft.Azure.Commands.Network.Models.PSSecurityRule]@{
                 Name                     = 'RDP-Rule' 
-                Description              = "Allow RDP" 
+                Description              = "Allow RDP"
                 Access                   = 'Allow' 
                 Protocol                 = 'Tcp' 
                 Direction                = 'Inbound' 
-                Priority                 = 100 
-                SourceAddressPrefix      = [System.Collections.Generic.List[string]]'Internet'
+                Priority                 = 1000 
+                SourceAddressPrefix      = [System.Collections.Generic.List[string]]'*'
                 SourcePortRange          = [System.Collections.Generic.List[String]]'*' 
                 DestinationAddressPrefix = [System.Collections.Generic.List[String]]'*' 
                 DestinationPortRange     = [System.Collections.Generic.List[String]]'3389'
             }
-            Write-Verbose -Message "[PROCESS] Security Group Remote Desktop Rule configured"
+
+            # Web Traffic Rule
+            $WebRule = [Microsoft.Azure.Commands.Network.Models.PSSecurityRule]@{
+                Name                     = 'Web-Traffic-Rule'
+                Description              = "Allow Web Traffic"
+                Access                   = 'Allow'
+                Protocol                 = 'Tcp' 
+                Direction                = 'Inbound' 
+                Priority                 = 1001 
+                SourceAddressPrefix      = [System.Collections.Generic.List[string]]'*'
+                SourcePortRange          = [System.Collections.Generic.List[String]]'*' 
+                DestinationAddressPrefix = [System.Collections.Generic.List[String]]'*' 
+                DestinationPortRange     = [System.Collections.Generic.List[String]]'80'
+            }
+
+            Write-Verbose -Message "[PROCESS] Remote Desktop and Web Traffic Rule Defined"
 
             # Security Group 
             $SecurityGrp = @{
                 ResourceGroupName = $ResourceGroupName
                 Location          = $Location
                 Name              = "${InterfaceName}_Security_grp"
-                SecurityRules     = $rule1
+                SecurityRules     = $RDPrule, $WebRule
+                ErrorAction       = 'Stop'
             }
             $NetSecGrp = New-AzureRmNetworkSecurityGroup @SecurityGrp
             Write-Verbose -Message "[PROCESS] Security Group Successfully Created"
-
+            
             # Configure Subnet
             $Subnet = @{
                 Name                 = $SubnetName 
