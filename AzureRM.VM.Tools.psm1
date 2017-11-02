@@ -212,18 +212,21 @@ Function New-AZRmRG {
         # Bind the parameter to a friendly variable
         $Location = $PsBoundParameters['Location']
     }
-
     process {
-        $params = @{
-            Name        = $ResourceGroupName
-            Location    = $Location
-            ErrorAction = 'stop'
-        }
-        Try {
-            $null = New-AzureRmResourceGroup @params
-            Write-Verbose -Message "Created $ResourceGroupName successfully"
-        } Catch {
-            Write-Error -Message "Failed to create group"
+        if (-not (Get-AzureRmResourceGroup -Name $ResourceGroupName -ErrorAction 'SilentlyContinue')) {
+            $params = @{
+                Name        = $ResourceGroupName
+                Location    = $Location
+                ErrorAction = 'stop'
+            }
+            Try {
+                $null = New-AzureRmResourceGroup @params
+                Write-Verbose -Message "[PROCESS] Created Resource Group '$ResourceGroupName' successfully"
+            } Catch {
+                Write-Error -Message "Failed to create group"
+            }
+        } else {
+            Write-Verbose -Message "[PROCESS] Resource Group '$ResourceGroupName' already exists"
         }    
     }
 } 
@@ -272,6 +275,9 @@ Function New-AZRmStorageAccount {
     }
  
     Process {
+        # Check if group exists if not, create
+        New-AZRmRG -ResourceGroupName $ResourceGroupName -Location $Location
+
         $sa = @{
             ResourceGroupName = $ResourceGroupName
             Name              = $StorageName
@@ -315,7 +321,7 @@ Function New-AZRmNetwork {
      Parse an existing resource group for the storage account to 
      be created in.
      
-     .PARAMETER InterfaceName
+     .PARAMETER NetInterfaceName
      Add a name for the network interface
      
      .PARAMETER AllocationMethod
@@ -334,7 +340,7 @@ Function New-AZRmNetwork {
      Address range
      
      .EXAMPLE
-     New-AZRmNetwork -ResourceGroupName 'test' -InterfaceName 'Network01' -AllocationMethod Static -VNetName 'Vnet09' -SubnetName 'Subnet01' `
+     New-AZRmNetwork -ResourceGroupName 'test' -NetInterfaceName 'Network01' -AllocationMethod Static -VNetName 'Vnet09' -SubnetName 'Subnet01' `
      -VNetSubnetAddressPrefix '10.0.0.0/24' -VNetAddressPrefix '10.0.0.0/16' -Location uksouth
      
      .NOTES
@@ -343,7 +349,7 @@ Function New-AZRmNetwork {
     [CmdletBinding()]
     param(
         [string] $ResourceGroupName,
-        [string] $InterfaceName,
+        [string] $NetInterfaceName,
         [ValidateSet('Dynamic', 'Static')] $AllocationMethod,
         [string] $VNetName = "VNet01",
         [string] $SubnetName,
@@ -361,10 +367,13 @@ Function New-AZRmNetwork {
         # Suppress Azure cmdlet message,
         # 'WARNING: The output object type of this cmdlet will be modified in a future release.' 
         $WarningPreference = 'SilentlyContinue' 
+
+        # Check if group exists if not, create
+        New-AZRmRG -ResourceGroupName $ResourceGroupName -Location $Location
         
         # Create Public IP Address
         $PIP = @{
-            Name              = "${InterfaceName}_nic1"
+            Name              = "${NetInterfaceName}_nic1"
             ResourceGroupName = $ResourceGroupName 
             Location          = $Location 
             AllocationMethod  = $AllocationMethod
@@ -376,7 +385,7 @@ Function New-AZRmNetwork {
             
             # Remote Desktop Rule
             $RDPrule = [Microsoft.Azure.Commands.Network.Models.PSSecurityRule]@{
-                Name                     = 'RDP-Rule' 
+                Name                     = 'RDP-Rule'
                 Description              = "Allow RDP"
                 Access                   = 'Allow' 
                 Protocol                 = 'Tcp' 
@@ -408,7 +417,7 @@ Function New-AZRmNetwork {
             $SecurityGrp = @{
                 ResourceGroupName = $ResourceGroupName
                 Location          = $Location
-                Name              = "${InterfaceName}_Security_grp"
+                Name              = "${NetInterfaceName}_Security_grp"
                 SecurityRules     = $RDPrule, $WebRule
                 ErrorAction       = 'Stop'
             }
@@ -439,7 +448,7 @@ Function New-AZRmNetwork {
 
             # Configure Network Interface
             $InterFace = @{
-                Name              = $InterfaceName 
+                Name              = $NetInterfaceName 
                 ResourceGroupName = $ResourceGroupName 
                 Location          = $Location 
                 SubnetId          = $VirtualNet.Subnets[0].Id 
@@ -502,7 +511,7 @@ Function New-AZRmVirtualMachine {
      .PARAMETER Version
      Choose the version. This parameter is set to 'latest' as default.
      
-     .PARAMETER InterfaceName
+     .PARAMETER NetInterfaceName
      Add the network interface name to use
      
      .PARAMETER StorageName
@@ -534,7 +543,7 @@ Function New-AZRmVirtualMachine {
         PublisherName      = 'MicrosoftWindowsServer'
         Offer              = 'WindowsServer'
         Skus               = '2012-R2-Datacenter'
-        InterFaceName      = 'ServerNet'
+        NetInterfaceName   = 'ServerNet'
         StorageName        = 'vmstorageunit12'
         StorageType        = 'Standard_GRS'
         ProvisionVMAgent   = $true
@@ -562,7 +571,7 @@ Function New-AZRmVirtualMachine {
         [string] $Offer,
         [string] $Skus,
         [String] $Version = 'latest',
-        [string] $InterfaceName,
+        [string] $NetInterfaceName,
         [string] $StorageName,
         [ValidateSet('Premium_LRS', 'Standard_GRS', 'Standard_LRS', 'Standard_RAGRS', 'Standard_ZRS')]
         [string] $StorageType,
@@ -596,6 +605,9 @@ Function New-AZRmVirtualMachine {
     }
 
     Process {
+        # Check if group exists if not, create
+        New-AZRmRG -ResourceGroupName $ResourceGroupName -Location $Location
+                
         # Creates a configurable virtual machine object
         $vm = @{
             VMName      = $VirtualMachineName 
@@ -663,7 +675,7 @@ Function New-AZRmVirtualMachine {
             Write-Verbose -Message "[PROCESS] Created OS Disk for Virtual Machine"
 
             # Adds a network interface to a virtual machine
-            $Interface = Get-AzureRmNetworkInterface -ResourceGroupName $ResourceGroupName -Name $InterfaceName 
+            $Interface = Get-AzureRmNetworkInterface -ResourceGroupName $ResourceGroupName -Name $NetInterfaceName 
             $VmObject = Add-AzureRmVMNetworkInterface -VM $VmObject -Id $Interface.Id            
             
             Write-Verbose -Message "[PROCESS] Added network interface to VM"
